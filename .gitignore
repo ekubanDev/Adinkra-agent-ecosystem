@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 .venv/
 node_modules/
+overseer/data/
+.DS_Store

@@ -1,0 +1,13 @@
+# Overseer Hermes profile. Secrets come from the environment (see docker-compose.yml), never from here.
+model:
+  provider: custom
+  default: gpt-5.5          # keep in step with LLM_MODEL in .env; swap freely, it's any OpenAI-compatible endpoint
+  base_url: https://api.openai.com/v1   # overridden by OPENAI_BASE_URL from LLM_BASE_URL
+agent:
+  max_turns: 60
+  api_max_retries: 3
+  reasoning_effort: medium
+toolsets:
+  - hermes-cli
+platform_toolsets:
+  telegram: [terminal, file, web, todo, cronjob, messaging, skills]
