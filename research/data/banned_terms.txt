@@ -1,0 +1,26 @@
+# One term per line, case-insensitive, matched as whole words/phrases. STARTER LIST: extend it.
+# Real trademark clearance is a separate step (search the phrase before use).
+nike
+adidas
+puma
+disney
+marvel
+dc comics
+pokemon
+nintendo
+star wars
+harry potter
+taylor swift
+beyonce
+black panther
+wakanda
+nfl
+nba
+fifa
+olympics
+coca-cola
+supreme
+gucci
+louis vuitton
+champion
+juneteenth official

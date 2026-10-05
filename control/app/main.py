@@ -76,6 +76,19 @@ async def spend_today():
     }
 
 
+@app.post("/briefs")
+async def add_brief(brief: dict):
+    brief["created_at"] = _now()
+    res = await db.briefs.insert_one(brief)
+    return {"id": str(res.inserted_id)}
+
+
+@app.get("/briefs")
+async def list_briefs(status: str = "proposed", limit: int = 50):
+    docs = await db.briefs.find({"status": status}).sort("created_at", -1).to_list(limit)
+    return [{**{k: v for k, v in d.items() if k != "_id"}, "id": str(d["_id"])} for d in docs]
+
+
 def margin_ok(price: float, cost: float, shipping: float, fee_pct: float = 6.5) -> bool:
     """Policy gate piece: refuse listings under the margin floor."""
     profit = price - cost - shipping - price * fee_pct / 100 - 0.20
