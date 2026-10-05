@@ -19,10 +19,10 @@ An autonomous AI agent ecosystem, pictured as a "space station":
 - Reports and alerts: Telegram
 
 ## Current phase: 0 Foundations
-- [ ] Storefront route decided (Etsy Payments isn't available to Ghana-based sellers; the alternative is Shopify + Printify)
-- [ ] Accounts and API keys: OpenAI (with a spend cap), Printify, Telegram bot
-- [ ] Server: Hermes + FastAPI + MongoDB running, Overseer sends a test message
-- [ ] First niche and up to 3 product types chosen
+- [x] Storefront route decided: Shopify + Printify + Paystack, connected (see docs/STOREFRONT_DECISION.md). Etsy Payments isn't available to Ghana-based sellers.
+- [x] Accounts and API keys: OpenAI (with a spend cap), Printify, Telegram bot (checked with scripts/check_keys.py)
+- [x] Server: Hermes + FastAPI + MongoDB running in docker-compose, Overseer replies on Telegram
+- [x] First niche and up to 3 product types chosen: meaning-first Adinkra/African-heritage designs; poster, mug, tee (see docs/NICHE.md)
 
 ## Rules for all code
 - Keep secrets in `.env` and never commit them.
