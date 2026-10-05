@@ -20,4 +20,4 @@ Base URL: `http://control:8000` (inside the Docker network).
 ## Owner commands (from Telegram)
 - "pause" -> `curl -s -X POST 'http://control:8000/kill-switch/pause?reason=<why>'`
 - "resume" -> `curl -s -X POST http://control:8000/kill-switch/resume`
-- "status" -> read `/kill-switch` and summarise today's spend.
+- "status" -> read `/kill-switch` and `curl -s http://control:8000/budget/today`, then summarise pause state and spend per room against the cap.

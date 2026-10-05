@@ -64,6 +64,18 @@ async def record_spend(s: Spend):
     return {"room": s.room, "spent_today": spent + s.amount_usd, "cap": settings.daily_budget_usd}
 
 
+@app.get("/budget/today")
+async def spend_today():
+    rows = await db.spend.aggregate(
+        [{"$match": {"day": _today()}}, {"$group": {"_id": "$room", "spent": {"$sum": "$amount_usd"}}}]
+    ).to_list(100)
+    return {
+        "day": _today(),
+        "cap_per_room_usd": settings.daily_budget_usd,
+        "rooms": {r["_id"]: round(r["spent"], 4) for r in rows},
+    }
+
+
 def margin_ok(price: float, cost: float, shipping: float, fee_pct: float = 6.5) -> bool:
     """Policy gate piece: refuse listings under the margin floor."""
     profit = price - cost - shipping - price * fee_pct / 100 - 0.20
