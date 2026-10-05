@@ -4,6 +4,7 @@ Printify calls are free, so they are not charged to the budget ledger, but every
 still checks the kill switch first (CLAUDE.md rule). Limits: 600 req/min overall.
 """
 import asyncio
+import base64
 import os
 import time
 
@@ -55,15 +56,18 @@ class PrintifyClient:
             raise KillSwitchActive(r.json().get("reason") or "kill switch active")
 
     async def _get(self, path: str, **params):
+        return await self._request("GET", path, params=params)
+
+    async def _request(self, method: str, path: str, **kw):
         await self._check_kill_switch()
         for attempt in range(self.retries + 1):
             await self.limiter.wait()
             try:
-                r = await self.http.get(path, params=params)
+                r = await self.http.request(method, path, **kw)
                 if r.status_code == 429 or r.status_code >= 500:
                     raise httpx.HTTPStatusError("retryable", request=r.request, response=r)
                 r.raise_for_status()
-                return r.json()
+                return r.json() if r.content else {}
             except (httpx.TransportError, httpx.HTTPStatusError) as e:
                 retryable = isinstance(e, httpx.TransportError) or e.response.status_code in (429,) or e.response.status_code >= 500
                 if not retryable or attempt == self.retries:
@@ -90,3 +94,17 @@ class PrintifyClient:
         return await self._get(
             f"/catalog/blueprints/{blueprint_id}/print_providers/{provider_id}/shipping.json"
         )
+
+    # --- writes (never publish from here; publishing goes through the policy gate) ---
+    async def upload_image(self, file_name: str, data: bytes):
+        return await self._request("POST", "/uploads/images.json",
+                                   json={"file_name": file_name, "contents": base64.b64encode(data).decode()})
+
+    async def create_product(self, payload: dict):
+        return await self._request("POST", f"/shops/{self.shop_id}/products.json", json=payload)
+
+    async def get_product(self, product_id: str):
+        return await self._request("GET", f"/shops/{self.shop_id}/products/{product_id}.json")
+
+    async def delete_product(self, product_id: str):
+        return await self._request("DELETE", f"/shops/{self.shop_id}/products/{product_id}.json")
