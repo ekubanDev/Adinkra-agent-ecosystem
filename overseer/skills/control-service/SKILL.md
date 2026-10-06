@@ -12,6 +12,8 @@ metadata:
 Base URL: `http://control:8000` (inside the Docker network).
 
 ## Before every paid or external action
+Only paid actions (model calls, image generation, listing fees) need a budget entry; the amount must be greater than 0.
+Free actions (reading status, approving, rejecting or publishing a draft) skip step 2: do not call `/budget/spend` for them.
 1. `curl -s http://control:8000/kill-switch` -> if `"paused": true`, stop and tell the owner.
 2. Record the cost first:
    `curl -s -X POST http://control:8000/budget/spend -H 'content-type: application/json' -d '{"room":"<room>","amount_usd":<est>,"item":"<what>"}'`
