@@ -25,6 +25,7 @@ services:
       - ./overseer/config.yaml:/opt/data/config.yaml:ro
       - ./overseer/SOUL.md:/opt/data/SOUL.md:ro
       - ./overseer/skills/control-service:/opt/data/skills/control-service:ro
+      - ./overseer/skills/review-drafts:/opt/data/skills/review-drafts:ro
     environment:
       OPENAI_BASE_URL: ${LLM_BASE_URL}
       OPENAI_API_KEY: ${LLM_API_KEY}

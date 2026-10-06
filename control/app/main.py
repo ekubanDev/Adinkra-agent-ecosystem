@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -5,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from .config import settings
 from .db import db
+from .publish import publish_to_printify
 
 app = FastAPI(title="Adinkra control service")
 
@@ -87,6 +89,66 @@ async def add_brief(brief: dict):
 async def list_briefs(status: str = "proposed", limit: int = 50):
     docs = await db.briefs.find({"status": status}).sort("created_at", -1).to_list(limit)
     return [{**{k: v for k, v in d.items() if k != "_id"}, "id": str(d["_id"])} for d in docs]
+
+
+# Drafts: pending_review -> approved -> publishing -> published | failed (or rejected).
+@app.post("/drafts")
+async def add_draft(draft: dict):
+    did = uuid.uuid4().hex[:8]
+    await db.drafts.insert_one({**draft, "_id": did, "status": "pending_review", "created_at": _now()})
+    return {"id": did}
+
+
+@app.get("/drafts")
+async def list_drafts(status: str = "pending_review"):
+    docs = await db.drafts.find({"status": status}).sort("created_at", 1).to_list(100)
+    return [{**{k: v for k, v in d.items() if k != "_id"}, "id": d["_id"]} for d in docs]
+
+
+async def _draft_or_404(did: str) -> dict:
+    d = await db.drafts.find_one({"_id": did})
+    if not d:
+        raise HTTPException(404, "no such draft")
+    return d
+
+
+@app.post("/drafts/{did}/approve")
+async def approve_draft(did: str):
+    res = await db.drafts.update_one({"_id": did, "status": "pending_review"},
+                                     {"$set": {"status": "approved", "approved_at": _now()}})
+    if not res.modified_count:
+        raise HTTPException(409, f"draft is {(await _draft_or_404(did))['status']}, not pending_review")
+    return {"id": did, "status": "approved"}
+
+
+@app.post("/drafts/{did}/reject")
+async def reject_draft(did: str, reason: str = ""):
+    res = await db.drafts.update_one({"_id": did, "status": "pending_review"},
+                                     {"$set": {"status": "rejected", "reason": reason}})
+    if not res.modified_count:
+        raise HTTPException(409, "draft is not pending_review")
+    return {"id": did, "status": "rejected"}
+
+
+@app.post("/drafts/{did}/publish")
+async def publish_draft(did: str):
+    """Every publish passes here: kill switch, human approval, daily cap. Nothing else may publish."""
+    if (await get_kill_switch())["paused"]:
+        raise HTTPException(423, "kill switch active")
+    today = _today()
+    if await db.drafts.count_documents({"published_day": today, "status": {"$in": ["publishing", "published"]}}) >= settings.max_publish_per_day:
+        raise HTTPException(429, f"daily publish cap {settings.max_publish_per_day} reached")
+    claimed = await db.drafts.find_one_and_update({"_id": did, "status": "approved"},
+                                                  {"$set": {"status": "publishing", "published_day": today}})
+    if not claimed:
+        raise HTTPException(409, f"draft is {(await _draft_or_404(did))['status']}, not approved")
+    try:
+        await publish_to_printify(claimed["product_id"])
+    except Exception as e:
+        await db.drafts.update_one({"_id": did}, {"$set": {"status": "failed", "error": type(e).__name__}})
+        raise HTTPException(502, f"publish failed: {type(e).__name__}")
+    await db.drafts.update_one({"_id": did}, {"$set": {"status": "published", "published_at": _now()}})
+    return {"id": did, "status": "published"}
 
 
 def margin_ok(price: float, cost: float, shipping: float, fee_pct: float = 6.5) -> bool:
