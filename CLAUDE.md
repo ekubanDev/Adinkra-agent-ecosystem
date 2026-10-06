@@ -18,7 +18,7 @@ An autonomous AI agent ecosystem, pictured as a "space station":
 - Database: MongoDB
 - Reports and alerts: Telegram
 
-## Current phase: 0 Foundations
+## Current phase: 1 Build the loop (Phase 0 done; see docs/RUNBOOK.md)
 - [x] Storefront route decided: Shopify + Printify + Paystack, connected (see docs/STOREFRONT_DECISION.md). Etsy Payments isn't available to Ghana-based sellers.
 - [x] Accounts and API keys: OpenAI (with a spend cap), Printify, Telegram bot (checked with scripts/check_keys.py)
 - [x] Server: Hermes + FastAPI + MongoDB running in docker-compose, Overseer replies on Telegram
@@ -41,3 +41,11 @@ An autonomous AI agent ecosystem, pictured as a "space station":
 docker-compose.yml
 .env.example
 ```
+
+## Phase 1 status
+- [x] Control service (kill switch, budget ledger, drafts, approval-gated publish, report), Overseer on Telegram with narrow MCP tools
+- [x] Printify client, pricing/margin rule, Research Lab briefs, artwork + quality gate, listing copy + policy gate, draft + Telegram review
+- [x] Factory cycle container (reference-aware; queues symbols without a reference image)
+- [ ] Reference images for the first symbols (owner) -> first real drafts
+- [ ] 20 live listings, no policy strikes; small real test order
+- [ ] Shopify views/favourites in the report (needs access token)

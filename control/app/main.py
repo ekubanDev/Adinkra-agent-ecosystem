@@ -1,5 +1,6 @@
 import uuid
 from bson import ObjectId
+from pymongo.errors import DuplicateKeyError
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -171,12 +172,17 @@ async def publish_draft(did: str):
     if (await get_kill_switch())["paused"]:
         raise HTTPException(423, "kill switch active")
     today = _today()
-    if await db.drafts.count_documents({"published_day": today, "status": {"$in": ["publishing", "published"]}}) >= settings.max_publish_per_day:
-        raise HTTPException(429, f"daily publish cap {settings.max_publish_per_day} reached")
     claimed = await db.drafts.find_one_and_update({"_id": did, "status": "approved"},
                                                   {"$set": {"status": "publishing", "published_day": today}})
     if not claimed:
         raise HTTPException(409, f"draft is {(await _draft_or_404(did))['status']}, not approved")
+    # Atomic daily cap: one counter document, incremented only while below the cap.
+    try:
+        await db.state.update_one({"_id": f"publish_count_{today}", "n": {"$lt": settings.max_publish_per_day}},
+                                  {"$inc": {"n": 1}}, upsert=True)
+    except DuplicateKeyError:
+        await db.drafts.update_one({"_id": did}, {"$set": {"status": "approved"}, "$unset": {"published_day": ""}})
+        raise HTTPException(429, f"daily publish cap {settings.max_publish_per_day} reached")
     try:
         await publish_to_printify(claimed["product_id"])
     except Exception as e:
