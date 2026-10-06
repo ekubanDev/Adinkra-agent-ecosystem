@@ -122,6 +122,9 @@ async def main():
             print(text or "cycle: nothing to do")
         except Exception as e:  # never let one bad cycle kill the loop
             print("cycle error:", type(e).__name__)
+            if isinstance(e, httpx.TransportError) and not once:
+                await asyncio.sleep(300)  # control service probably restarting: retry soon, not in 6 hours
+                continue
         if once:
             break
         await asyncio.sleep(interval)

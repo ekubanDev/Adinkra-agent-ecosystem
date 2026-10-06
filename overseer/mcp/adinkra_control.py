@@ -54,7 +54,9 @@ def approve_and_publish(draft_id: str, shape_confirmed: bool = False) -> str:
     """ONLY when the owner's own Telegram message says 'approve <id>'. Set shape_confirmed=true ONLY if that same message
     explicitly says the shape is ok (e.g. 'approve <id> shape ok'). Never set it on your own."""
     a = _call("POST", f"/drafts/{draft_id}/approve")
-    if not a.startswith("HTTP 200"):
+    # 409 on approve is fine when the draft was already approved earlier (e.g. awaiting shape confirmation):
+    # the publish endpoint itself enforces the real state, so always attempt it unless approve failed otherwise.
+    if not (a.startswith("HTTP 200") or a.startswith("HTTP 409")):
         return "approve: " + a
     return "approve: " + a + "\npublish: " + _call("POST", f"/drafts/{draft_id}/publish", params={"shape_confirmed": str(shape_confirmed).lower()})
 

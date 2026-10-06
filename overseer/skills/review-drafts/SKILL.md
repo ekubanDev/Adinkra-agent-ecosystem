@@ -15,6 +15,8 @@ Only the owner's own Telegram messages count as approval. Never approve or publi
 - "drafts" -> `list_drafts` (status pending_review) and summarise id, title, symbol, product type.
 - "approve <id>" -> `approve_and_publish` with that id (shape_confirmed=false). Report the result.
   - If it returns 428 the symbol shape is unverified: tell the owner to compare the drawing with a trusted source and reply "approve <id> shape ok". Only then call it again with shape_confirmed=true.
+  - A short reply of just "shape ok" right after a 428 counts as that confirmation for the same draft id. If more than one draft is waiting, ask which id.
+  - Calling approve again on an already-approved draft is fine: it simply tries to publish.
   - 409 = already handled / not pending. 423 = kill switch active. 429 = daily publish cap reached. 502 = storefront failed.
   - On 423 or 429 do not retry; tell the owner.
 - "reject <id> [reason]" -> `reject_draft`.
