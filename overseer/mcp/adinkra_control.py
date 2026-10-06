@@ -14,7 +14,7 @@ def _call(method: str, path: str, **kw) -> str:
         r = httpx.request(method, BASE + path, timeout=60, **kw)
     except httpx.HTTPError as e:
         return f"ERROR: control service unreachable ({type(e).__name__}). Do not proceed."
-    meaning = {423: "kill switch active", 409: "draft not in the right state", 429: "daily publish cap reached",
+    meaning = {423: "kill switch active", 409: "draft not in the right state", 429: "daily publish cap reached", 428: "symbol shape unverified: ask the owner to confirm with 'shape ok'",
                402: "budget cap reached", 502: "storefront (Printify) call failed", 404: "not found"}.get(r.status_code, "")
     return f"HTTP {r.status_code}{' (' + meaning + ')' if meaning else ''}: {r.text[:1500]}"
 
@@ -50,12 +50,13 @@ def list_drafts(status: str = "pending_review") -> str:
 
 
 @mcp.tool()
-def approve_and_publish(draft_id: str) -> str:
-    """ONLY when the owner's own Telegram message says 'approve <id>'. Approves the draft, then publishes it through the gated endpoint."""
+def approve_and_publish(draft_id: str, shape_confirmed: bool = False) -> str:
+    """ONLY when the owner's own Telegram message says 'approve <id>'. Set shape_confirmed=true ONLY if that same message
+    explicitly says the shape is ok (e.g. 'approve <id> shape ok'). Never set it on your own."""
     a = _call("POST", f"/drafts/{draft_id}/approve")
     if not a.startswith("HTTP 200"):
         return "approve: " + a
-    return "approve: " + a + "\npublish: " + _call("POST", f"/drafts/{draft_id}/publish")
+    return "approve: " + a + "\npublish: " + _call("POST", f"/drafts/{draft_id}/publish", params={"shape_confirmed": str(shape_confirmed).lower()})
 
 
 @mcp.tool()

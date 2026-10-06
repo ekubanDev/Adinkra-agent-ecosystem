@@ -29,7 +29,8 @@ def art_prompt(brief: dict) -> str:
         f"({brief['meaning']}), drawn faithfully and recognisably. Style: {brief['style_direction']}. "
         f"Mood/angle: {brief['angle']} "
         "Centered composition, generous margins, flat clean shapes suited to printing, solid single background. "
-        "Do NOT add any text, letters, logos, brands, characters or people. "
+        "ABSOLUTELY NO TEXT: no letters, words, title, caption, subtitle, numbers or signature anywhere in the image; the symbol is the only subject. "
+        "No logos, brands, characters or people. Do not add extra decorative lines, dots, borders or ornaments beyond the symbol itself. "
         f"Avoid: {', '.join(brief.get('avoid') or []) or 'nothing special'}."
     )
 
@@ -66,9 +67,9 @@ policy_issue = any brand, character, real person or trademark. Be strict."""
 
 async def quality_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: str, model: str, control) -> dict:
     ref = reference_path(brief["symbol"])
-    if ref is None:  # fail closed
-        return {"decision": "needs_human_review", "reason": f"no reference image for {brief['symbol']}"}
     await _spend(control, GATE_COST_USD, f"gate {brief['symbol']}")
+    if ref is None:  # no trusted shape reference: check print quality only; the owner must confirm the shape
+        return await _quality_only_gate(brief, image, llm_base_url, llm_key, model)
 
     def data_url(b: bytes) -> str:
         return "data:image/png;base64," + base64.b64encode(b).decode()
@@ -86,3 +87,23 @@ async def quality_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: st
     ok = v.get("symbol_faithful") and v.get("legible") and not v.get("artifacts") \
         and not v.get("contains_text_or_logo") and not v.get("policy_issue")
     return {"decision": "pass" if ok else "reject", "checks": v}
+
+
+QUALITY_ONLY_PROMPT = """You are the quality gate for a print-on-demand shop. The image is a generated design of the Adinkra symbol '{symbol}'.
+Reply as JSON: {{"legible": bool, "artifacts": bool, "contains_text_or_logo": bool, "policy_issue": bool, "notes": "one sentence"}}.
+artifacts = visible glitches, malformed shapes, noise or extra invented decoration. contains_text_or_logo = any letters, words, logos or brand marks.
+policy_issue = any brand, character, real person or trademark. You cannot verify the symbol's exact shape: do not judge that. Be strict."""
+
+
+async def _quality_only_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: str, model: str) -> dict:
+    url = "data:image/png;base64," + base64.b64encode(image).decode()
+    content = [{"type": "text", "text": QUALITY_ONLY_PROMPT.format(symbol=brief["symbol"])},
+               {"type": "image_url", "image_url": {"url": url}}]
+    async with httpx.AsyncClient(timeout=180) as http:
+        r = await http.post(f"{llm_base_url.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {llm_key}"},
+                            json={"model": model, "response_format": {"type": "json_object"},
+                                  "messages": [{"role": "user", "content": content}]})
+    r.raise_for_status()
+    v = json.loads(r.json()["choices"][0]["message"]["content"])
+    ok = v.get("legible") and not v.get("artifacts") and not v.get("contains_text_or_logo") and not v.get("policy_issue")
+    return {"decision": "pass_unverified_shape" if ok else "reject", "checks": v, "shape_verified": False}

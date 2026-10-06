@@ -16,7 +16,7 @@ class Rejected(Exception):
 
 
 async def create_draft(brief: dict, copy: dict, image: bytes, gate: dict, printify) -> dict:
-    if gate.get("decision") != "pass":
+    if gate.get("decision") not in ("pass", "pass_unverified_shape"):
         raise Rejected(f"quality gate: {gate.get('decision')} ({gate.get('reason') or gate.get('checks')})")
     problems = policy_check(copy, brief)
     if problems:
@@ -48,4 +48,5 @@ async def create_draft(brief: dict, copy: dict, image: bytes, gate: dict, printi
         new.append({"id": v["id"], "price": round(price * 100), "is_enabled": True})
         report.append((v.get("title"), cost, price))
     await printify.update_product(prod["id"], {"variants": new})
-    return {"product_id": prod["id"], "published": False, "variants": report}
+    return {"product_id": prod["id"], "published": False, "variants": report,
+            "shape_verified": gate.get("decision") == "pass"}

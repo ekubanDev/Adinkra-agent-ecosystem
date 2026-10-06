@@ -167,11 +167,14 @@ async def reject_draft(did: str, reason: str = ""):
 
 
 @app.post("/drafts/{did}/publish")
-async def publish_draft(did: str):
+async def publish_draft(did: str, shape_confirmed: bool = False):
     """Every publish passes here: kill switch, human approval, daily cap. Nothing else may publish."""
     if (await get_kill_switch())["paused"]:
         raise HTTPException(423, "kill switch active")
     today = _today()
+    d = await _draft_or_404(did)
+    if d.get("shape_verified") is not True and not shape_confirmed:  # missing counts as unverified
+        raise HTTPException(428, "symbol shape unverified: the owner must confirm the shape before publishing")
     claimed = await db.drafts.find_one_and_update({"_id": did, "status": "approved"},
                                                   {"$set": {"status": "publishing", "published_day": today}})
     if not claimed:

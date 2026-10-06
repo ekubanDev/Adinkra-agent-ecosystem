@@ -18,6 +18,7 @@ from rooms.etsy_pod.review import submit_for_review  # noqa: E402
 MAX_DRAFTS_PER_CYCLE = int(os.environ.get("MAX_DRAFTS_PER_CYCLE", 2))
 MAX_PENDING_REVIEW = int(os.environ.get("MAX_PENDING_REVIEW", 5))
 MIN_BRIEF_QUEUE = 4
+MAX_DROPS_PER_CYCLE = 2  # stop spending when images keep failing the gate
 CANDIDATES = 2
 
 
@@ -53,24 +54,27 @@ async def run_cycle(env: dict, control_url: str = "http://localhost:8000") -> di
         try:
             for brief in queue:
                 if reference_path(brief["symbol"]) is None:
-                    out["missing_refs"].add(brief["symbol"])
-                    await control.post(f"/briefs/{brief['id']}/status", params={"status": "needs_reference"})
-                    continue
+                    out["missing_refs"].add(brief["symbol"])  # still produced, but flagged shape-unverified for the owner
                 if len(out["drafted"]) >= MAX_DRAFTS_PER_CYCLE or pending + len(out["drafted"]) >= MAX_PENDING_REVIEW:
                     out["notes"].append("draft limit reached for this cycle or review queue is full"); break
                 try:
                     winner = None
+                    last_note = ""
                     for attempt in range(2):  # plan: retry once, then drop
                         imgs = await generate_images(brief, CANDIDATES, env["OPENAI_API_KEY"], env["IMAGE_MODEL"], control)
                         for img in imgs:
                             gate = await quality_gate(brief, img, env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], control)
-                            if gate["decision"] == "pass":
+                            last_note = (gate.get("checks") or {}).get("notes", gate.get("reason", ""))
+                            if gate["decision"] in ("pass", "pass_unverified_shape"):
                                 winner = (img, gate); break
                         if winner:
                             break
                     if not winner:
-                        await control.post(f"/briefs/{brief['id']}/status", params={"status": "dropped", "note": "no image passed the gate"})
-                        out["dropped"].append(brief["symbol"]); continue
+                        await control.post(f"/briefs/{brief['id']}/status", params={"status": "dropped", "note": f"no image passed the gate: {last_note}"[:200]})
+                        out["dropped"].append(f"{brief['symbol']} ({last_note[:80]})")
+                        if len(out["dropped"]) >= MAX_DROPS_PER_CYCLE:
+                            out["notes"].append("stopped: images keep failing the gate"); break
+                        continue
                     copy = await generate_copy(brief, env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], control)
                     result = await create_draft(brief, copy, winner[0], winner[1], printify)
                     did = await submit_for_review(brief, copy, result, winner[0], control, env["TELEGRAM_BOT_TOKEN"], env["TELEGRAM_CHAT_ID"])
@@ -93,7 +97,7 @@ def summary(out: dict) -> str | None:
     if out["dropped"]:
         parts.append("Dropped: " + "; ".join(out["dropped"]))
     if out["missing_refs"]:
-        parts.append("Need reference images for: " + ", ".join(sorted(out["missing_refs"]))
+        parts.append("Shape unverified (no reference image) for: " + ", ".join(sorted(out["missing_refs"]))
                      + " (add research/data/reference/<symbol>.png)")
     parts += out["notes"]
     return "Factory cycle: " + " | ".join(parts) if parts else None
