@@ -7,8 +7,34 @@ from pydantic import BaseModel, Field
 from .config import settings
 from .db import db
 from .publish import publish_to_printify
+from .report import build_report, format_report, send_telegram
 
-app = FastAPI(title="Adinkra control service")
+import asyncio
+from contextlib import asynccontextmanager
+
+
+async def _daily_report_loop():
+    """Push the report to Telegram once a day at REPORT_HOUR_UTC, regardless of the kill switch."""
+    last = None
+    while True:
+        now = _now()
+        if now.hour == settings.report_hour_utc and last != now.date():
+            try:
+                await send_telegram(format_report(await build_report(1)) + "\n\n" + format_report(await build_report(30)))
+            except Exception:
+                pass
+            last = now.date()
+        await asyncio.sleep(300)
+
+
+@asynccontextmanager
+async def lifespan(_):
+    task = asyncio.create_task(_daily_report_loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Adinkra control service", lifespan=lifespan)
 
 
 def _now() -> datetime:
@@ -149,6 +175,17 @@ async def publish_draft(did: str):
         raise HTTPException(502, f"publish failed: {type(e).__name__}")
     await db.drafts.update_one({"_id": did}, {"$set": {"status": "published", "published_at": _now()}})
     return {"id": did, "status": "published"}
+
+
+@app.get("/report")
+async def report(days: int = 30):
+    r = await build_report(days)
+    return {**r, "text": format_report(r)}
+
+
+@app.post("/report/send")
+async def report_send(days: int = 30):
+    return {"sent": await send_telegram(format_report(await build_report(days)))}
 
 
 def margin_ok(price: float, cost: float, shipping: float, fee_pct: float = 6.5) -> bool:

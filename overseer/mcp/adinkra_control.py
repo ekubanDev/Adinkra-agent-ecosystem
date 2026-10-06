@@ -38,6 +38,12 @@ def spend_today() -> str:
 
 
 @mcp.tool()
+def report(days: int = 30) -> str:
+    """Results: orders, revenue, costs, AI spend, net profit and draft counts over the last N days (read-only)."""
+    return _call("GET", "/report", params={"days": max(1, min(days, 365))})
+
+
+@mcp.tool()
 def list_drafts(status: str = "pending_review") -> str:
     """List drafts by status: pending_review, approved, published, failed, rejected."""
     return _call("GET", "/drafts", params={"status": status})

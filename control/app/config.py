@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     daily_budget_usd: float = 5.0
     margin_floor_pct: float = 30.0
     max_publish_per_day: int = 3  # slow ramp
+    report_hour_utc: int = 18
     printify_api_token: str = ""
     printify_shop_id: str = ""
     telegram_bot_token: str = ""
