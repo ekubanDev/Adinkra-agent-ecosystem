@@ -108,3 +108,6 @@ class PrintifyClient:
 
     async def delete_product(self, product_id: str):
         return await self._request("DELETE", f"/shops/{self.shop_id}/products/{product_id}.json")
+
+    async def update_product(self, product_id: str, payload: dict):
+        return await self._request("PUT", f"/shops/{self.shop_id}/products/{product_id}.json", json=payload)
