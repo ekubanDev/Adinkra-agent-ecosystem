@@ -1,25 +1,19 @@
 ---
 name: control-service
-description: "Check the kill switch and record spend with the Adinkra control service before any paid or external action."
-version: 1.0.0
+description: "Check the kill switch and spend through the adinkra_control tools before any paid or external action."
+version: 2.0.0
 metadata:
   hermes:
     tags: [adinkra, budget, kill-switch]
 ---
 
-# Control service
+# Control service (via the adinkra_control tools)
 
-Base URL: `http://control:8000` (inside the Docker network).
+You have no shell, file or web tools. All control-service access goes through these tools:
+`kill_switch_status`, `pause_all`, `spend_today`, `list_drafts`, `approve_and_publish`, `reject_draft`.
 
-## Before every paid or external action
-Only paid actions (model calls, image generation, listing fees) need a budget entry; the amount must be greater than 0.
-Free actions (reading status, approving, rejecting or publishing a draft) skip step 2: do not call `/budget/spend` for them.
-1. `curl -s http://control:8000/kill-switch` -> if `"paused": true`, stop and tell the owner.
-2. Record the cost first:
-   `curl -s -X POST http://control:8000/budget/spend -H 'content-type: application/json' -d '{"room":"<room>","amount_usd":<est>,"item":"<what>"}'`
-   - HTTP 423 = kill switch active. HTTP 402 = daily cap reached. Either way: do not proceed; report to the owner.
-
-## Owner commands (from Telegram)
-- "pause" -> `curl -s -X POST 'http://control:8000/kill-switch/pause?reason=<why>'`
-- "resume" -> `curl -s -X POST http://control:8000/kill-switch/resume`
-- "status" -> read `/kill-switch` and `curl -s http://control:8000/budget/today`, then summarise pause state and spend per room against the cap.
+- Before any work, call `kill_switch_status`. If `paused` is true, stop and tell the owner.
+- "status" -> call `kill_switch_status` and `spend_today`; summarise pause state and spend per room against the cap.
+- "pause" (or repeated errors / a platform policy warning) -> call `pause_all` with a short reason, then tell the owner.
+- "resume" -> you cannot resume. Tell the owner to run: `curl -X POST localhost:8000/kill-switch/resume` on the server.
+- Paid actions (model calls, images) are budgeted by the room code itself, not by you.

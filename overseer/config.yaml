@@ -7,7 +7,14 @@ agent:
   max_turns: 60
   api_max_retries: 3
   reasoning_effort: medium
-toolsets:
-  - hermes-cli
+# No shell, file or web tools: the Overseer reaches the outside world only through the MCP tools below.
+toolsets: [todo, cronjob, skills]
 platform_toolsets:
-  telegram: [terminal, file, web, todo, cronjob, messaging, skills]
+  cli: [todo, cronjob, skills]
+  telegram: [todo, cronjob, skills]
+mcp_servers:
+  adinkra_control:
+    command: /opt/hermes/.venv/bin/python
+    args: [/opt/data/mcp/adinkra_control.py]
+    env:
+      CONTROL_URL: http://control:8000

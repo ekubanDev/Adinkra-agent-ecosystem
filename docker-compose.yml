@@ -24,6 +24,7 @@ services:
       - ./overseer/data:/opt/data
       - ./overseer/config.yaml:/opt/data/config.yaml:ro
       - ./overseer/SOUL.md:/opt/data/SOUL.md:ro
+      - ./overseer/mcp:/opt/data/mcp:ro
       - ./overseer/skills/control-service:/opt/data/skills/control-service:ro
       - ./overseer/skills/review-drafts:/opt/data/skills/review-drafts:ro
     environment:
