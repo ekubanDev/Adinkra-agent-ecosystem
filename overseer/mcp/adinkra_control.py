@@ -1,6 +1,7 @@
 """Narrow MCP tool surface for the Overseer: the ONLY way it touches the control service.
 Deliberately absent: resume (the agent may stop the system, never restart it), budget writes, raw HTTP, shell."""
 import os
+import re
 
 import httpx
 from mcp.server.mcpserver import MCPServer
@@ -50,15 +51,18 @@ def list_drafts(status: str = "pending_review") -> str:
 
 
 @mcp.tool()
-def approve_and_publish(draft_id: str, shape_confirmed: bool = False) -> str:
-    """ONLY when the owner's own Telegram message says 'approve <id>'. Set shape_confirmed=true ONLY if that same message
-    explicitly says the shape is ok (e.g. 'approve <id> shape ok'). Never set it on your own."""
+def approve_and_publish(draft_id: str, owner_message: str) -> str:
+    """Publish a draft. Call ONLY for the owner's own Telegram message. Pass that message text VERBATIM in owner_message
+    (e.g. 'approve 34823ef6 shape ok'). Shape confirmation is decided by this tool from that text, not by you:
+    it counts only if the message contains 'shape ok'. Never edit, add to or invent the message."""
+    shape_confirmed = re.search(r"shape\s*ok", owner_message or "", re.I) is not None
     a = _call("POST", f"/drafts/{draft_id}/approve")
     # 409 on approve is fine when the draft was already approved earlier (e.g. awaiting shape confirmation):
-    # the publish endpoint itself enforces the real state, so always attempt it unless approve failed otherwise.
+    # the publish endpoint itself enforces the real state.
     if not (a.startswith("HTTP 200") or a.startswith("HTTP 409")):
         return "approve: " + a
-    return "approve: " + a + "\npublish: " + _call("POST", f"/drafts/{draft_id}/publish", params={"shape_confirmed": str(shape_confirmed).lower()})
+    return ("approve: " + a + "\npublish: "
+            + _call("POST", f"/drafts/{draft_id}/publish", params={"shape_confirmed": str(shape_confirmed).lower()}))
 
 
 @mcp.tool()
