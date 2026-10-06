@@ -1,4 +1,5 @@
 import uuid
+from bson import ObjectId
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -109,6 +110,14 @@ async def add_brief(brief: dict):
     brief["created_at"] = _now()
     res = await db.briefs.insert_one(brief)
     return {"id": str(res.inserted_id)}
+
+
+@app.post("/briefs/{bid}/status")
+async def set_brief_status(bid: str, status: str, note: str = ""):
+    res = await db.briefs.update_one({"_id": ObjectId(bid)}, {"$set": {"status": status, "note": note, "updated_at": _now()}})
+    if not res.matched_count:
+        raise HTTPException(404, "no such brief")
+    return {"id": bid, "status": status}
 
 
 @app.get("/briefs")

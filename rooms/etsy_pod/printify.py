@@ -36,14 +36,14 @@ class RateLimiter:
 
 
 class PrintifyClient:
-    def __init__(self, token: str, shop_id: str, per_minute: int = 400, retries: int = 4):
+    def __init__(self, token: str, shop_id: str, per_minute: int = 400, retries: int = 4, control_url: str | None = None):
         self.shop_id = shop_id
         self.retries = retries
         self.limiter = RateLimiter(per_minute)
         self.http = httpx.AsyncClient(
             base_url=BASE, headers={"Authorization": f"Bearer {token}"}, timeout=30
         )
-        self.control = httpx.AsyncClient(base_url=CONTROL_URL, timeout=10)
+        self.control = httpx.AsyncClient(base_url=control_url or CONTROL_URL, timeout=10)
 
     async def aclose(self):
         await self.http.aclose()

@@ -36,5 +36,19 @@ services:
     depends_on:
       - control
 
+  factory:
+    build:
+      context: .
+      dockerfile: Dockerfile.factory
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CONTROL_URL: http://control:8000
+      ADINKRA_REF_DIR: /app/research/data/reference
+    volumes:
+      - ./research/data:/app/research/data   # add reference images here without rebuilding
+    depends_on:
+      - control
+
 volumes:
   mongo_data:

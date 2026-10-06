@@ -5,7 +5,9 @@ from pathlib import Path
 
 import httpx
 
-REF_DIR = Path(__file__).resolve().parent.parent.parent / "research" / "data" / "reference"
+import os
+
+REF_DIR = Path(os.environ.get("ADINKRA_REF_DIR") or Path(__file__).resolve().parent.parent.parent / "research" / "data" / "reference")
 IMAGE_COST_USD = 0.08  # conservative estimate per image (medium quality); true cost should be read back from usage
 GATE_COST_USD = 0.02
 SIZES = {"poster": "1024x1536", "mug": "1536x1024", "tee": "1024x1024"}
