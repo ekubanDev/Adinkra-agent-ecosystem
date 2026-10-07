@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from research.briefs import generate_briefs  # noqa: E402
 from rooms.etsy_pod.artwork import generate_images, quality_gate, reference_path  # noqa: E402
 from rooms.etsy_pod.listing import generate_copy  # noqa: E402
+from rooms.etsy_pod.marketing import marketing_step  # noqa: E402
 from rooms.etsy_pod.pipeline import Rejected, create_draft  # noqa: E402
 from rooms.etsy_pod.printify import PrintifyClient  # noqa: E402
 from rooms.etsy_pod.review import submit_for_review  # noqa: E402
@@ -103,6 +104,10 @@ async def run_cycle(env: dict, control_url: str = "http://localhost:8000") -> di
                     out["dropped"].append(f"{brief['symbol']} ({e})")
                 except httpx.HTTPStatusError as e:  # 402/423 from the ledger or kill switch: stop the cycle
                     out["notes"].append(f"stopped on HTTP {e.response.status_code} for {brief['symbol']}"); break
+            try:  # traffic packs for live listings; a failure here never affects the factory loop
+                out["packs"] = await marketing_step(env, control, printify)
+            except Exception as e:
+                out["notes"].append(f"traffic pack step skipped: {type(e).__name__}")
         finally:
             await printify.aclose()
     return out

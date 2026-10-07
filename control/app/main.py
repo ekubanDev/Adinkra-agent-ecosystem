@@ -166,6 +166,21 @@ async def reject_draft(did: str, reason: str = ""):
     return {"id": did, "status": "rejected"}
 
 
+@app.post("/drafts/{did}/marketing-sent")
+async def marketing_sent(did: str):
+    await _draft_or_404(did)
+    await db.drafts.update_one({"_id": did}, {"$set": {"marketing_sent_at": _now()}})
+    return {"id": did, "marketing_sent": True}
+
+
+@app.post("/drafts/{did}/no-marketing")
+async def no_marketing(did: str):
+    """Exclude a listing from traffic packs (duplicates, designs we don't want to promote)."""
+    await _draft_or_404(did)
+    await db.drafts.update_one({"_id": did}, {"$set": {"no_marketing": True}})
+    return {"id": did, "no_marketing": True}
+
+
 @app.post("/drafts/{did}/publish")
 async def publish_draft(did: str, shape_confirmed: bool = False):
     """Every publish passes here: kill switch, human approval, daily cap. Nothing else may publish."""
