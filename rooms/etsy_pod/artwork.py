@@ -27,7 +27,8 @@ def reference_path(symbol: str) -> Path | None:
 
 def art_prompt(brief: dict) -> str:
     notes = load_shape_notes().get(brief["symbol"].strip().lower())
-    form = f" Required form: {notes}" if notes else ""
+    form = (f" Required form: {notes} This required form OVERRIDES any conflicting detail in the mood or angle text below, "
+            "and the mood or angle text must never be written into the image.") if notes else ""
     return (
         f"Original print design for a {brief['product_type']}: the Adinkra symbol '{brief['symbol']}' "
         f"({brief['meaning']}), drawn faithfully and recognisably.{form} Style: {brief['style_direction']}. "

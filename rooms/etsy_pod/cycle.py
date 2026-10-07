@@ -42,7 +42,11 @@ async def run_cycle(env: dict, control_url: str = "http://localhost:8000") -> di
         queue = await open_briefs()
         if len([b for b in queue if reference_path(b["symbol"])]) < MIN_BRIEF_QUEUE and len(queue) < MIN_BRIEF_QUEUE:
             try:
-                ok, _ = await generate_briefs(5, env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], control)
+                if env.get("BRIEFS_PROVIDER") == "deepseek" and env.get("DEEPSEEK_API_KEY"):  # cheaper text-only step, opt-in
+                    ok, _ = await generate_briefs(5, "https://api.deepseek.com", env["DEEPSEEK_API_KEY"],
+                                                  env.get("DEEPSEEK_MODEL") or "deepseek-flash", control, est_cost_usd=0.01)
+                else:
+                    ok, _ = await generate_briefs(5, env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], control)
                 for b in ok:
                     (await control.post("/briefs", json=b.model_dump())).raise_for_status()
                 queue = await open_briefs()
