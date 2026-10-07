@@ -50,9 +50,19 @@ async def run_cycle(env: dict, control_url: str = "http://localhost:8000") -> di
                 out["notes"].append(f"brief generation stopped: HTTP {e.response.status_code}")
 
         pending = len((await control.get("/drafts", params={"status": "pending_review"})).json())
+        # Never make a second listing for the same symbol + product type (plan: no near-duplicates).
+        taken = set()
+        for st in ("pending_review", "approved", "publishing", "published"):
+            for d in (await control.get("/drafts", params={"status": st})).json():
+                if d.get("symbol") and d.get("product_type"):
+                    taken.add((d["symbol"].strip().lower(), d["product_type"]))
         printify = PrintifyClient(env["PRINTIFY_API_TOKEN"], env["PRINTIFY_SHOP_ID"], control_url=control_url)
         try:
             for brief in queue:
+                key = (brief["symbol"].strip().lower(), brief["product_type"])
+                if key in taken:
+                    await control.post(f"/briefs/{brief['id']}/status", params={"status": "dropped", "note": "duplicate of an existing draft or listing"})
+                    continue
                 if reference_path(brief["symbol"]) is None:
                     out["missing_refs"].add(brief["symbol"])  # still produced, but flagged shape-unverified for the owner
                 if len(out["drafted"]) >= MAX_DRAFTS_PER_CYCLE or pending + len(out["drafted"]) >= MAX_PENDING_REVIEW:
@@ -80,6 +90,7 @@ async def run_cycle(env: dict, control_url: str = "http://localhost:8000") -> di
                     did = await submit_for_review(brief, copy, result, winner[0], control, env["TELEGRAM_BOT_TOKEN"], env["TELEGRAM_CHAT_ID"])
                     await control.post(f"/briefs/{brief['id']}/status", params={"status": "drafted", "note": did})
                     out["drafted"].append(did)
+                    taken.add(key)
                 except Rejected as e:
                     await control.post(f"/briefs/{brief['id']}/status", params={"status": "dropped", "note": str(e)[:200]})
                     out["dropped"].append(f"{brief['symbol']} ({e})")
