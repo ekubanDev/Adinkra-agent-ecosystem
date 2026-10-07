@@ -69,7 +69,7 @@ artifacts = visible glitches, malformed shapes or noise. contains_text_or_logo =
 policy_issue = any brand, character, real person or trademark. Be strict."""
 
 
-async def quality_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: str, model: str, control) -> dict:
+async def _primary_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: str, model: str, control) -> dict:
     ref = reference_path(brief["symbol"])
     await _spend(control, GATE_COST_USD, f"gate {brief['symbol']}")
     if ref is None:  # no trusted shape reference: check print quality only; the owner must confirm the shape
@@ -118,3 +118,54 @@ async def _quality_only_gate(brief: dict, image: bytes, llm_base_url: str, llm_k
     ok = (v.get("legible") and not v.get("artifacts") and not v.get("contains_text_or_logo")
           and not v.get("policy_issue") and not v.get("contradicts_form_notes"))
     return {"decision": "pass_unverified_shape" if ok else "reject", "checks": v, "shape_verified": False}
+
+
+SECOND_GATE_COST_USD = 0.03
+
+
+async def second_opinion(brief: dict, image: bytes, api_key: str, model: str) -> dict:
+    """An independent reviewer (Anthropic) applying the same checks. Raises on API errors so an outage never counts as a pass."""
+    ref = reference_path(brief["symbol"])
+    notes = load_shape_notes().get(brief["symbol"].strip().lower())
+    form_line = (
+        f"Written form notes for this symbol: {notes} Set contradicts_form_notes = true if the image clearly adds or changes "
+        "anything these notes rule out (for example a stand or base). Otherwise false."
+    ) if notes else "contradicts_form_notes = false (no written notes available)."
+
+    def block(b: bytes) -> dict:
+        return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(b).decode()}}
+
+    if ref:
+        text = GATE_PROMPT.format(symbol=brief["symbol"], meaning=brief["meaning"]) + "\nReply with the JSON object only."
+        content = [block(ref.read_bytes()), block(image), {"type": "text", "text": text}]
+    else:
+        text = QUALITY_ONLY_PROMPT.format(symbol=brief["symbol"], form_line=form_line) + "\nReply with the JSON object only."
+        content = [block(image), {"type": "text", "text": text}]
+    async with httpx.AsyncClient(timeout=180) as http:
+        r = await http.post("https://api.anthropic.com/v1/messages",
+                            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
+                            json={"model": model, "max_tokens": 500, "messages": [{"role": "user", "content": content}]})
+    r.raise_for_status()
+    raw = "".join(b.get("text", "") for b in r.json()["content"])
+    v = json.loads(raw[raw.index("{"): raw.rindex("}") + 1])
+    ok = (v.get("legible") and not v.get("artifacts") and not v.get("contains_text_or_logo") and not v.get("policy_issue")
+          and not v.get("contradicts_form_notes") and (v.get("symbol_faithful", True) if ref else True))
+    return {"ok": bool(ok), "checks": v}
+
+
+async def quality_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: str, model: str, control,
+                       second_key: str | None = None, second_model: str = "claude-sonnet-5-5") -> dict:
+    """Primary reviewer, then (when a key is set) an independent second reviewer. Both must pass; any disagreement rejects."""
+    result = await _primary_gate(brief, image, llm_base_url, llm_key, model, control)
+    if result["decision"] not in ("pass", "pass_unverified_shape"):
+        return result
+    if not second_key:
+        result["second_opinion"] = "skipped (no key)"
+        return result
+    await _spend(control, SECOND_GATE_COST_USD, f"second opinion {brief['symbol']}")
+    second = await second_opinion(brief, image, second_key, second_model)
+    result["second_opinion"] = second
+    if not second["ok"]:
+        result["decision"] = "reject"
+        result["checks"] = {**result.get("checks", {}), "notes": "second reviewer: " + str(second["checks"].get("notes", "failed a check"))}
+    return result

@@ -73,7 +73,10 @@ async def run_cycle(env: dict, control_url: str = "http://localhost:8000") -> di
                     for attempt in range(2):  # plan: retry once, then drop
                         imgs = await generate_images(brief, CANDIDATES, env["OPENAI_API_KEY"], env["IMAGE_MODEL"], control)
                         for img in imgs:
-                            gate = await quality_gate(brief, img, env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], control)
+                            gate = await quality_gate(brief, img, env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], control,
+                                                      # opt-in: set SECOND_REVIEWER=anthropic in .env once the account has credit
+                                                      second_key=(env.get("ANTHROPIC_API_KEY") or None) if env.get("SECOND_REVIEWER") == "anthropic" else None,
+                                                      second_model=env.get("ANTHROPIC_MODEL") or "claude-sonnet-5-5")
                             last_note = (gate.get("checks") or {}).get("notes", gate.get("reason", ""))
                             if gate["decision"] in ("pass", "pass_unverified_shape"):
                                 winner = (img, gate); break
