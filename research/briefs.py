@@ -13,6 +13,12 @@ def load_symbols() -> dict[str, str]:
     return {s["name"].lower(): s["meaning"] for s in json.loads((DATA / "symbols.json").read_text())["symbols"]}
 
 
+def load_shape_notes() -> dict[str, str]:
+    """Written shape descriptions (only where we have a source). Steers generation and catches contradictions."""
+    return {s["name"].lower(): s["shape_notes"]
+            for s in json.loads((DATA / "symbols.json").read_text())["symbols"] if s.get("shape_notes")}
+
+
 def load_banned() -> list[str]:
     return [l.strip().lower() for l in (DATA / "banned_terms.txt").read_text().splitlines()
             if l.strip() and not l.startswith("#")]

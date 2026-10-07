@@ -19,7 +19,7 @@ MAX_DRAFTS_PER_CYCLE = int(os.environ.get("MAX_DRAFTS_PER_CYCLE", 2))
 MAX_PENDING_REVIEW = int(os.environ.get("MAX_PENDING_REVIEW", 5))
 MIN_BRIEF_QUEUE = 4
 MAX_DROPS_PER_CYCLE = 2  # stop spending when images keep failing the gate
-CANDIDATES = 2
+CANDIDATES = 1  # one image per attempt, max two attempts: keeps cost per draft low
 
 
 def tg(env, text):

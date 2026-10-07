@@ -28,3 +28,11 @@ def test_policy_blocks_banned_missing_disclosure_and_meaning():
     assert any("banned" in p for p in policy_check(good_copy(title="Nike style poster"), BRIEF))
     assert any("disclosures" in p for p in policy_check(good_copy(description="Sankofa means go back and fetch it."), BRIEF))
     assert any("meaning" in p for p in policy_check(good_copy(description="Nice art." + DISCLOSURE), BRIEF))
+
+
+def test_sankofa_prompt_carries_form_notes_and_no_stands():
+    from rooms.etsy_pod.artwork import art_prompt
+    base = {"product_type": "poster", "meaning": "m", "style_direction": "s", "angle": "a", "avoid": []}
+    p = art_prompt({**base, "symbol": "Sankofa"})
+    assert "turned backward" in p and "pedestal" in p
+    assert "Required form" not in art_prompt({**base, "symbol": "Aya"})

@@ -3,9 +3,11 @@ import base64
 import json
 from pathlib import Path
 
+import os
+
 import httpx
 
-import os
+from research.briefs import load_shape_notes
 
 REF_DIR = Path(os.environ.get("ADINKRA_REF_DIR") or Path(__file__).resolve().parent.parent.parent / "research" / "data" / "reference")
 IMAGE_COST_USD = 0.08  # conservative estimate per image (medium quality); true cost should be read back from usage
@@ -24,13 +26,15 @@ def reference_path(symbol: str) -> Path | None:
 
 
 def art_prompt(brief: dict) -> str:
+    notes = load_shape_notes().get(brief["symbol"].strip().lower())
+    form = f" Required form: {notes}" if notes else ""
     return (
         f"Original print design for a {brief['product_type']}: the Adinkra symbol '{brief['symbol']}' "
-        f"({brief['meaning']}), drawn faithfully and recognisably. Style: {brief['style_direction']}. "
+        f"({brief['meaning']}), drawn faithfully and recognisably.{form} Style: {brief['style_direction']}. "
         f"Mood/angle: {brief['angle']} "
         "Centered composition, generous margins, flat clean shapes suited to printing, solid single background. "
         "ABSOLUTELY NO TEXT: no letters, words, title, caption, subtitle, numbers or signature anywhere in the image; the symbol is the only subject. "
-        "No logos, brands, characters or people. Do not add extra decorative lines, dots, borders or ornaments beyond the symbol itself. "
+        "No logos, brands, characters or people. Do not add stands, bases, pedestals, ground lines, borders, frames or extra ornaments: the symbol alone. "
         f"Avoid: {', '.join(brief.get('avoid') or []) or 'nothing special'}."
     )
 
@@ -90,14 +94,20 @@ async def quality_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: st
 
 
 QUALITY_ONLY_PROMPT = """You are the quality gate for a print-on-demand shop. The image is a generated design of the Adinkra symbol '{symbol}'.
-Reply as JSON: {{"legible": bool, "artifacts": bool, "contains_text_or_logo": bool, "policy_issue": bool, "notes": "one sentence"}}.
+Reply as JSON: {{"legible": bool, "artifacts": bool, "contains_text_or_logo": bool, "policy_issue": bool, "contradicts_form_notes": bool, "notes": "one sentence"}}.
+{form_line}
 artifacts = visible glitches, malformed shapes, noise or extra invented decoration. contains_text_or_logo = any letters, words, logos or brand marks.
 policy_issue = any brand, character, real person or trademark. You cannot verify the symbol's exact shape: do not judge that. Be strict."""
 
 
 async def _quality_only_gate(brief: dict, image: bytes, llm_base_url: str, llm_key: str, model: str) -> dict:
+    notes = load_shape_notes().get(brief["symbol"].strip().lower())
+    form_line = (
+        f"Written form notes for this symbol: {notes} Set contradicts_form_notes = true if the image clearly adds or changes "
+        "anything these notes rule out (for example a stand or base). Otherwise false."
+    ) if notes else "contradicts_form_notes = false (no written notes available)."
     url = "data:image/png;base64," + base64.b64encode(image).decode()
-    content = [{"type": "text", "text": QUALITY_ONLY_PROMPT.format(symbol=brief["symbol"])},
+    content = [{"type": "text", "text": QUALITY_ONLY_PROMPT.format(symbol=brief["symbol"], form_line=form_line)},
                {"type": "image_url", "image_url": {"url": url}}]
     async with httpx.AsyncClient(timeout=180) as http:
         r = await http.post(f"{llm_base_url.rstrip('/')}/chat/completions", headers={"Authorization": f"Bearer {llm_key}"},
@@ -105,5 +115,6 @@ async def _quality_only_gate(brief: dict, image: bytes, llm_base_url: str, llm_k
                                   "messages": [{"role": "user", "content": content}]})
     r.raise_for_status()
     v = json.loads(r.json()["choices"][0]["message"]["content"])
-    ok = v.get("legible") and not v.get("artifacts") and not v.get("contains_text_or_logo") and not v.get("policy_issue")
+    ok = (v.get("legible") and not v.get("artifacts") and not v.get("contains_text_or_logo")
+          and not v.get("policy_issue") and not v.get("contradicts_form_notes"))
     return {"decision": "pass_unverified_shape" if ok else "reject", "checks": v, "shape_verified": False}
